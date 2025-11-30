@@ -1,19 +1,19 @@
 const { authenticateLegrand, getLegrandDevices } = require('./legrand');
 const { sendToHubitat } = require('./hubitat');
+const { discoverLegrandHub } = require('./discovery');
 
 async function syncDevices() {
+  const baseUrl = await discoverLegrandHub();
+  if (!baseUrl) return; // Exit if no hub found
+
   try {
-    const token = await authenticateLegrand();
-    const devices = await getLegrandDevices(token);
+    const token = await authenticateLegrand(baseUrl);
+    const devices = await getLegrandDevices(baseUrl, token);
 
     for (const device of devices) {
-      if (device.type === 'light') {
+      if (device.type === 'light' && device.hubitatId) {
         const hubitatCommand = device.state === 'on' ? 'on' : 'off';
-        if (device.hubitatId) {
-          await sendToHubitat(device.hubitatId, hubitatCommand);
-        } else {
-          console.warn(`No Hubitat ID mapped for Legrand device ${device.name}`);
-        }
+        await sendToHubitat(device.hubitatId, hubitatCommand);
       }
     }
   } catch (error) {
