@@ -1,8 +1,0 @@
-version: '3.8'
-services:
-  hub-connector:
-    build: .
-    container_name: hub-connector
-    restart: unless-stopped
-    env_file: .env
-    network_mode: "host"
