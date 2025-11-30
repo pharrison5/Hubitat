@@ -1,5 +1,3 @@
-require('dotenv').config();
 const { syncDevices } = require('./sync');
 
-console.log('Starting Legrand ↔ Hubitat connector...');
-setInterval(syncDevices, parseInt(process.env.SYNC_INTERVAL, 10));
+console.log('Starting Legrand ↔ Hubitat connector with auto-discovery only...');
