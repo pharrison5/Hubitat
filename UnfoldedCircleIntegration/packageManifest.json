@@ -1,0 +1,43 @@
+{
+  "packageName": "Unfolded Circle Remote 3 Integration",
+  "author": "Paul Harrison",
+  "version": "1.0.0",
+  "minimumHEVersion": "2.0.0",
+  "license": "MIT License",
+  "licenseFile": "LICENSE.md",
+  "dateReleased": "2025-12-10",
+  "communityDocumentation": "https://github.com/pharrison5/Hubitat/tree/main/UnfoldedCircleIntegration/README.md",
+  "apps": [
+    {
+      "id": "18f51a87-16d4-4f01-a1e6-09e8674d8b9c",
+      "name": "Unfolded Circle Remote 3 App",
+      "version": "1.0.0",
+      "required": true,
+      "oauth": false,
+      "location": "https://raw.githubusercontent.com/{your_github_username}/{your_repo_name}/main/UnfoldedCircleRemote3App.groovy"
+    }
+  ],
+  "drivers": [
+    {
+      "id": "e64c39f0-2d8a-40a1-8c4d-2e1b9f7c0a6d",
+      "name": "UC Remote 3 Global Driver",
+      "version": "1.0.0",
+      "required": true,
+      "location": "https://raw.githubusercontent.com/{your_github_username}/{your_repo_name}/main/UnfoldedCircleRemote3GlobalDriver.groovy"
+    },
+    {
+      "id": "9d0b7a4c-5f6e-4b8a-b1c2-3e4d5f6a7b8c",
+      "name": "UC Remote 3 Activity Driver",
+      "version": "1.0.0",
+      "required": true,
+      "location": "https://raw.githubusercontent.com/{your_github_username}/{your_repo_name}/main/UnfoldedCircleRemote3ActivityDriver.groovy"
+    },
+    {
+      "id": "3a8d2e1f-4c5b-4e6a-a9b0-1c2d3e4f5a6b",
+      "name": "UC Remote 3 Entity Driver",
+      "version": "1.0.0",
+      "required": true,
+      "location": "https://raw.githubusercontent.com/{your_github_username}/{your_repo_name}/main/UnfoldedCircleRemote3EntityDriver.groovy"
+    }
+  ]
+}
