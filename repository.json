@@ -1,0 +1,18 @@
+{
+  "author": "Paul Harrison",
+  "gitHubUrl": "https://github.com/pharrison5/Hubitat",
+  "payPalUrl": "https://www.paypal.me/PaulHarrisonDev",
+  "packages": [
+    {
+      "id": "6e41b17a-5140-4e77-8210-50727cbda815",
+      "name": "Unfolded Circle Remote 3 Integration",
+      "category": "Integrations",
+      "location": "https://raw.githubusercontent.com/pharrison5/Hubitat/refs/heads/main/UnfoldedCircleIntegration/packageManifest.json",
+      "description": "Integration for the Unfolded Circle Remote 3 remote control",
+      "tags": [
+        "IR & RF",
+        "Multimedia"
+      ]
+    }
+  ]
+}
