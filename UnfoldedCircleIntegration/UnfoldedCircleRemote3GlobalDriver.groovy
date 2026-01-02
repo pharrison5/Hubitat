@@ -1,121 +1,70 @@
 /**
  * Unfolded Circle Remote 3 Global Driver
  *
- * Handles global API commands applicable to the UC Remote hub itself,
- * such as reboot, setting system mode, and power_off (sleep).
+ * Handles global hub actions.
+ * "Off" simulates the Hardware Power Button by turning off the active activity.
+ * "Refresh" syncs status of all child activity devices.
  *
- * Version: 1.0.0
+ * Version: 1.0.30
  * Copyright (c) 2025 Paul Harrison
  * Licensed under the MIT License
  */
 metadata {
     definition(name: "Remote3GlobalDriver", namespace: "pharrison", author: "Paul Harrison") {
         capability "Refresh"
-        capability "Switch" // Allows 'off()' command for power_off
-        command "reboot"
-        command "setMode", ["string"]
+        capability "Switch" 
     }
 }
 
-// --- GLOBAL COMMANDS ---
-
 def on() { 
-    log.warn "The ON command is not applicable for the Global Hub entity and is ignored."
+    // The Global Switch doesn't really have an "On" state of its own.
+    // We just set the visual state. The real state is determined by the activities.
+    sendEvent(name: "switch", value: "on")
 }
 
 def off() { 
-    stabilizeConnection()
-    // CRITICAL: Map Hubitat 'off' to the global API power command to stop activities/sleep
-    sendCommand("power_off") 
-}
-
-def reboot() { 
-    stabilizeConnection()
-    sendCommand("reboot") 
-}
-
-def setMode(modeName) {
-    stabilizeConnection()
-    sendCommand("set_mode", [mode: modeName]) 
+    log.info "Global Off Requested: Delegating to Activity Drivers..."
+    
+    // 1. Get all Child Devices from the Parent App
+    def siblings = parent.getChildDevices()
+    
+    // 2. Find any Activity Driver that is currently ON
+    def activeDriver = siblings.find { child ->
+        child.typeName == "Remote3ActivityDriver" && child.currentValue("switch") == "on"
+    }
+    
+    if (activeDriver) {
+        log.info "Found Active Device: [${activeDriver.displayName}]. Sending Off Command."
+        // 3. Command the SIBLING driver to turn off.
+        // This leverages the code in the Activity Driver that we know works.
+        activeDriver.off()
+    } else {
+        log.info "No Activity Drivers are currently On. Device is effectively Off."
+    }
+    
+    // Always update global status to off
+    sendEvent(name: "switch", value: "off")
 }
 
 def refresh() {
-    stabilizeConnection() 
-}
-
-// --- UTILITY CORE ---
-
-def safeVerify() {
-    return parent?.silentVerify() 
-}
-
-def stabilizeConnection() {
-    if (!parent) {
-        log.error "FATAL ERROR: Child device is missing its Parent SmartApp context. Cannot execute commands."
-        throw new Exception("Device creation incomplete. Parent App link is missing.")
-    }
+    log.info "Global Refresh: Triggering Refresh on all Child Activities..."
     
-    log.info "STARTING AGGRESSIVE POLLING CYCLE (Reliable Wake/Auth Check)."
+    def siblings = parent.getChildDevices()
+    boolean anyOn = false
     
-    int maxPolls = 20
-    boolean isVerified = false
-    
-    for (int i = 0; i < maxPolls; i++) {
-        log.debug "Aggressive Poll Check ${i+1}..."
-        
-        if (safeVerify()) { 
-            isVerified = true
-            log.info "AGGRESSIVE WAKE SUCCESS: Remote is awake and authenticated after ${i} checks."
-            break
-        }
-        pauseExecution(1000)
-    }
-
-    if (!isVerified) {
-        log.error "FATAL FAILURE: Remote failed to wake up after ${maxPolls} attempts. Cannot proceed."
-        throw new Exception("Remote device failed to stabilize connection for command execution.")
-    }
-}
-
-def sendCommand(cmd, params = [:]) {
-    def parentApp = parent
-    def entityId = device.deviceNetworkId.toString().trim() 
-    
-    def url = "http://${parentApp.remoteIP}/api/entities/${entityId}/command" 
-
-    def headers = [
-        "Authorization": "Bearer ${parentApp.state.authToken}", 
-        "Content-Type": "application/json" 
-    ]
-    
-    def bodyMap = [
-        cmd_id: cmd,
-        parameters: params 
-    ]
-    
-    log.info "GLOBAL COMMAND PAYLOAD: Method=PUT, URL=${url}, Body Map=[cmd_id:${cmd}, parameters:${params}]" 
-
-    int maxRetries = 2
-    boolean success = false
-    
-    for (int retry = 1; retry <= maxRetries; retry++) {
-        log.debug "Command '${cmd}' attempt ${retry} for ${device.displayName}."
-        try {
-            httpPutJson([uri: url, headers: headers, body: bodyMap, timeout: 5]) { resp ->
-                if (resp.status == 200 || resp.status == 202) { 
-                    log.info "Command SUCCEEDED on attempt ${retry}! Status ${resp.status}."
-                    success = true
-                } else {
-                    log.error "Command FAILED on attempt ${retry}: Status ${resp.status}, Response: ${resp.data}"
-                }
-            }
-        } catch (e) { 
-            log.warn "Command network failure on attempt ${retry}: ${e.message}"
-        }
-
-        if (success) {
-            return
+    siblings.each { child ->
+        if (child.typeName == "Remote3ActivityDriver") {
+            // Tell the child to refresh itself (it knows how to talk to the remote)
+            child.refresh()
+            // Check if this child is now On
+            if (child.currentValue("switch") == "on") anyOn = true
         }
     }
+    
+    // Update Global Switch to match reality (If any activity is On, Global is On)
+    def state = anyOn ? "on" : "off"
+    if (device.currentValue("switch") != state) {
+        sendEvent(name: "switch", value: state)
+        log.info "Global Status updated to: ${state}"
+    }
 }
-// (Note: refreshStatusQuery is typically not needed for Global device, but can be added if required)
