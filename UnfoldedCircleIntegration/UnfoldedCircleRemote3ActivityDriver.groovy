@@ -4,7 +4,7 @@
  * Dedicated driver for controlling UC Remote activities (e.g., "Watch TV").
  * Optimized for stability, lifecycle control (start/off), and status synchronization.
  *
- * Version: 1.0.0
+ * Version: 1.0.25
  * Copyright (c) 2025 Paul Harrison
  * Licensed under the MIT License
  */
@@ -16,16 +16,16 @@ metadata {
     }
 }
 
-// --- ACTIVITY COMMANDS ---
+// --- COMMAND IMPLEMENTATIONS ---
 
 def on() { 
     stabilizeConnection()
-    sendCommand("start") // Activity Start
+    sendCommand("start") 
 }
 
 def off() { 
     stabilizeConnection()
-    sendCommand("off") // Activity Stop (The required API verb)
+    sendCommand("stop") 
 } 
 
 def push() { 
@@ -34,34 +34,31 @@ def push() {
 }
 
 def refresh() {
+    stabilizeConnection()
     refreshStatusQuery() 
 }
 
-// --- UTILITY CORE (Stability and Execution) ---
-
-def safeVerify() {
-    return parent?.silentVerify() 
-}
+// --- STABILITY & EXECUTION CORE ---
 
 def stabilizeConnection() {
-    if (!parent) {
-        log.error "FATAL ERROR: Child device is missing its Parent SmartApp context. Cannot execute commands."
-        throw new Exception("Device creation incomplete. Parent App link is missing.")
-    }
+    def parentApp = parent
     
     log.info "STARTING AGGRESSIVE POLLING CYCLE (Reliable Wake/Auth Check)."
     
-    int maxPolls = 20
+    int maxPolls = 20 // Max attempts over 20 seconds
     boolean isVerified = false
     
     for (int i = 0; i < maxPolls; i++) {
         log.debug "Aggressive Poll Check ${i+1}..."
         
-        if (safeVerify()) { 
+        // Check connectivity AND authentication simultaneously (using parent's silentVerify)
+        if (parentApp.silentVerify()) {
             isVerified = true
             log.info "AGGRESSIVE WAKE SUCCESS: Remote is awake and authenticated after ${i} checks."
             break
         }
+        
+        // Wait 1 second before the next check
         pauseExecution(1000)
     }
 
@@ -71,10 +68,14 @@ def stabilizeConnection() {
     }
 }
 
-def sendCommand(cmd, params = [:]) {
+def sendCommand(cmd) {
     def parentApp = parent
     def entityId = device.deviceNetworkId.toString().trim() 
     
+    // CRITICAL FIX: Map the internal 'stop' command to the required API verb 'off'.
+    def apiCmd = (cmd == "stop") ? "off" : cmd
+
+    // Confirmed final structure: PUT to /api/entities/{id}/command
     def url = "http://${parentApp.remoteIP}/api/entities/${entityId}/command" 
 
     def headers = [
@@ -82,27 +83,26 @@ def sendCommand(cmd, params = [:]) {
         "Content-Type": "application/json" 
     ]
     
+    // Final correct payload structure: cmd_id and parameters
     def bodyMap = [
-        cmd_id: cmd,
-        parameters: params 
+        cmd_id: apiCmd,
+        parameters: [:]
     ]
     
-    log.info "FINAL COMMAND PAYLOAD: Method=PUT, URL=${url}, Body Map=[cmd_id:${cmd}, parameters:${params}]" 
+    log.info "FINAL COMMAND PAYLOAD: Method=PUT, URL=${url}, Body Map=[cmd_id:${apiCmd}, parameters:[:]]" 
 
     int maxRetries = 2
-    boolean success = false
+    boolean success = false // Synchronous exit flag
     
     for (int retry = 1; retry <= maxRetries; retry++) {
-        log.debug "Command '${cmd}' attempt ${retry} for ${device.displayName}."
+        log.debug "Command '${apiCmd}' attempt ${retry} for ${device.displayName}."
         try {
+            // Use httpPutJson for reliable encoding and PUT method
             httpPutJson([uri: url, headers: headers, body: bodyMap, timeout: 5]) { resp ->
                 if (resp.status == 200 || resp.status == 202) { 
                     log.info "Command SUCCEEDED on attempt ${retry}! Status ${resp.status}."
-                    
-                    if (cmd in ["on", "start", "off", "stop"]) {
-                        def status = (cmd in ["on", "start"]) ? "on" : "off"
-                        sendEvent(name: "switch", value: status)
-                    }
+                    if (apiCmd in ["on", "start"]) sendEvent(name: "switch", value: "on")
+                    if (apiCmd in ["off", "stop"]) sendEvent(name: "switch", value: "off")
                     success = true
                 } else {
                     log.error "Command FAILED on attempt ${retry}: Status ${resp.status}, Response: ${resp.data}"
@@ -113,17 +113,17 @@ def sendCommand(cmd, params = [:]) {
         }
 
         if (success) {
-            return
+            return // Synchronous exit
         }
     }
 }
 
+
 def refreshStatusQuery() {
-    stabilizeConnection()
-    
     def parentApp = parent
     def entityId = device.deviceNetworkId.toString().trim()
     
+    // Confirmed path for reading state
     def url = "http://${parentApp.remoteIP}/api/entities/${entityId}"
     
     def headers = [
@@ -133,7 +133,7 @@ def refreshStatusQuery() {
     log.info "REFRESH QUERY: Method=GET, URL=${url}" 
 
     int maxRetries = 2
-    boolean success = false
+    boolean success = false // Synchronous exit flag
 
     for (int retry = 1; retry <= maxRetries; retry++) {
         log.debug "Refresh query attempt ${retry} for ${device.displayName}."
@@ -142,13 +142,13 @@ def refreshStatusQuery() {
                 if (resp.status == 200) {
                     def data = resp.data
                     
+                    // Check for standard state fields: 'is_active' or the attribute 'state'
                     def isActive = data.is_active ?: (data.attributes?.state == "ON")
                     def status = isActive ? "on" : "off"
                     
                     sendEvent(name: "switch", value: status)
-                    
                     log.info "Status successfully updated on attempt ${retry} for ${device.displayName}: switch is now ${status}"
-                    success = true
+                    success = true // Set the flag
                 } else {
                     log.error "Refresh FAILED on attempt ${retry}: Status ${resp.status}, Response: ${resp.data}"
                 }
@@ -158,7 +158,7 @@ def refreshStatusQuery() {
         }
 
         if (success) {
-            return
+            return // Synchronous exit
         }
     }
 }
